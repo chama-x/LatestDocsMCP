@@ -68,6 +68,30 @@ server.tool(
   }
 );
 
+// Define prompts for tools
+server.prompt(
+  'lookup_crate_docs',
+  { crateName: z.string().describe('Name of the Rust crate to lookup documentation for') },
+  ({ crateName }) => ({
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Please analyze and summarize the documentation for the Rust crate '${crateName}'. Focus on:
+1. The main purpose and features of the crate
+2. Key types and functions
+3. Common usage patterns
+4. Any important notes or warnings
+5. VERY IMPORTANT: Latest Version
+
+Documentation content will follow.`
+        }
+      }
+    ]
+  })
+);
+
 // Connect to the stdio transport and start the server
 server.connect(new StdioServerTransport())
   .then(() => {
