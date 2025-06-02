@@ -1,101 +1,60 @@
-# MCP Rust Documentation Server
+# MCP Documentation Server
 
-This is a Model Context Protocol (MCP) server that fetches and returns documentation for Rust crates providing essential context for LLM's when working with Rust code.
+A Rust-based documentation server built with Tauri 2.0, Axum, and jsonrpsee.
+
+## Project Structure
+
+This project implements a Tauri 2.0 application with an embedded Axum server that provides jsonrpsee RPC endpoints.
+
+- `src-tauri/`: Contains the Rust backend code
+  - `src/`: Source code for the Tauri application and Axum server
+    - `main.rs`: Entry point for the Tauri application
+    - `lib.rs`: Main application logic, including Axum server setup
+    - `rpc.rs`: Implementation of jsonrpsee RPC methods
+  - `assets/`: Static frontend assets (HTML, CSS, JS)
 
 ## Features
 
-- Fetches documentation for any Rust crate available on docs.rs
-- Strips HTML and formats the content for readability
-- Limits response size to prevent overwhelming the client
-- Uses the latest MCP SDK (v1.6.1)
+- Tauri 2.0 desktop application shell
+- Embedded Axum web server
+- jsonrpsee RPC service with a simple ping method
+- Basic HTML/JS frontend to test the RPC service
 
-## Installation
-
-```bash
-# Clone the repository
-git https://github.com/0xKoda/mcp-rust-docs.git
-cd mcp-rust-docs
-
-# Install dependencies
-npm install
-```
+## Development
 
 ### Prerequisites
 
-- Node.js 
-- npm 
+- Rust 1.77+ and Cargo
+- Tauri 2.0 CLI (`cargo install tauri-cli --version '^2.0.0-beta'`)
+- Node.js and npm (for frontend development)
 
-## Usage
-
-```bash
-# Start the server directly
-npm start
-```
-
-## Integrating with AI Assistants
-
-### Claude Desktop
-
-Add the following to your Claude Desktop configuration file (`claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "rust-docs": {
-      "command": "node",
-      "args": ["/absolute/path/to/index.js"]
-    }
-  }
-}
-```
-
-Replace `/absolute/path/to/index.js` with the absolute path to the index.js file in this repository.
-
-## Example Usage
-
-Once the server is running and configured with your AI assistant, you can ask questions like:
-
-- "Look up the documentation for the 'tokio' crate"
-- "What features does the 'serde' crate provide?"
-- "Show me the documentation for 'ratatui'"
-- "Can you explain the main modules in the 'axum' crate?"
-
-The AI will use the `lookup_crate_docs` tool to fetch and display the relevant documentation.
-
-## Testing with MCP Inspector
-
-You can test this server using the MCP Inspector:
+### Running the App
 
 ```bash
-npx @modelcontextprotocol/inspector
+# Development mode
+cargo tauri dev
+
+# Build for production
+cargo tauri build
 ```
 
-Then select the "Connect to a local server" option and follow the prompts.
+### Testing the RPC Service
 
-## How It Works
+Once the application is running:
 
-This server implements a single MCP tool called `lookup_crate_docs` that:
+1. The Tauri window will display a simple UI with a "Test Ping RPC" button
+2. Click the button to send a request to the embedded Axum server
+3. The response from the jsonrpsee RPC service will be displayed
 
-1. Takes a Rust crate name as input (optional, defaults to 'tokio' if not provided)
-2. Fetches the documentation from docs.rs
-3. Converts the HTML to plain text using the html-to-text library
-4. Truncates the content if it exceeds 8000 characters
-5. Returns the formatted documentation in the proper MCP response format
+You can also test the RPC service directly with curl:
 
-## SDK Implementation Notes
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"ping","params":{"message":"Hello MCP"},"id":1}' http://127.0.0.1:3000/rpc
+```
 
-This server uses the MCP SDK with carefully structured import paths. If you're modifying the code, be aware that:
+## Next Steps
 
-1. The SDK requires importing from specific paths (e.g., `@modelcontextprotocol/sdk/server/mcp.js`)
-2. We use the high-level McpServer API rather than the low-level tools
-3. The tool definition uses Zod for parameter validation
-4. Console output is redirected to stderr to avoid breaking the MCP protocol
-5. The tool returns properly formatted MCP response objects
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-MIT
+1. Implement additional RPC methods for documentation functionality
+2. Integrate Tantivy for full-text search
+3. Develop a more comprehensive frontend
+4. Add database support for storing documentation metadata 
