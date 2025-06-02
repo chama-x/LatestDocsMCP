@@ -2,9 +2,7 @@ mod rpc;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use tracing_subscriber::EnvFilter;
-use log;
+use tower_http::cors::{Any, CorsLayer};
 
 // Shared application state
 pub struct AppState {
@@ -18,26 +16,41 @@ impl AppState {
     }
 }
 
-async fn run_axum_server(app_state: Arc<AppState>) {
-    // Create the RPC router and module
-    let (rpc_router, rpc_module) = rpc::create_rpc_router();
+async fn run_axum_server(_app_state: Arc<AppState>) {
+    // Create the RPC router
+    let rpc_router = rpc::create_rpc_router();
+
+    // Configure CORS
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any)
+        .allow_credentials(false);
 
     // Create an Axum router
     let app = axum::Router::new()
         .merge(rpc_router)
         // Add health check endpoint
         .route("/health", axum::routing::get(|| async { "OK" }))
-        .with_state(rpc_module);
+        // Add CORS middleware
+        .layer(cors);
 
     // Define the address for the Axum server
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3000);
-    tracing::info!("Axum server with RPC endpoint starting on http://{}", addr);
+    println!("Axum server with RPC endpoint starting on http://{}", addr);
 
     // Run the Axum server
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-        .await
-        .expect("Failed to start Axum server");
+    match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => {
+            println!("Listening on {}", listener.local_addr().unwrap());
+            if let Err(err) = axum::serve(listener, app).await {
+                eprintln!("Server error: {}", err);
+            }
+        }
+        Err(err) => {
+            eprintln!("Failed to bind to {}: {}", addr, err);
+        }
+    }
 }
 
 #[tauri::command]
@@ -47,17 +60,12 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialize tracing (logging)
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env()
-            .add_directive("info".parse().unwrap())
-            .add_directive("mcp_docs_server_core=debug".parse().unwrap()))
-        .init();
-
+    // Initialize app state
     let app_state = Arc::new(AppState::new());
+    let app_state_clone = Arc::clone(&app_state);
 
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                   tauri_plugin_log::Builder::default()
@@ -66,10 +74,8 @@ pub fn run() {
                 )?;
             }
             
-            let app_state_clone = Arc::clone(&app_state);
-
-            // Spawn the Axum server in a separate Tokio task
-            tokio::spawn(async move {
+            // Use the Tauri runtime to spawn the server task
+            tauri::async_runtime::spawn(async move {
                 run_axum_server(app_state_clone).await;
             });
 
