@@ -13,7 +13,8 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
+            padding: 20px;
         }
         .container {
             background-color: white;
@@ -40,34 +41,153 @@
         button:hover {
             background-color: #45a049;
         }
-        #response {
+        .section {
+            margin-top: 2rem;
+            padding: 1rem;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        .response {
             margin-top: 1rem;
             padding: 1rem;
             background-color: #f8f9fa;
             border-radius: 4px;
             border-left: 4px solid #4CAF50;
+            font-family: monospace;
+            white-space: pre-wrap;
             display: none;
+        }
+        textarea, input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        .result-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+        .result-title {
+            font-weight: bold;
+            margin-bottom: 5px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>MCP Documentation Server</h1>
-        <p>Welcome to the MCP Documentation Server. This is a basic Tauri application with an embedded Axum server and jsonrpsee RPC service.</p>
+        <p>Welcome to the MCP Documentation Server. This is a Tauri application with an embedded Axum server, jsonrpsee RPC service, and Tantivy search integration.</p>
         
-        <h2>Test the RPC Service</h2>
-        <p>Click the button below to test the RPC ping method:</p>
-        
-        <button id="pingButton">Test Ping RPC</button>
-        
-        <div id="response"></div>
+        <div class="section">
+            <h2>Test the RPC Service</h2>
+            <p>Click the button below to test the RPC ping method:</p>
+            <button id="pingButton">Test Ping RPC</button>
+            <div id="pingResponse" class="response"></div>
+        </div>
+
+        <div class="section">
+            <h2>Add Document</h2>
+            <div>
+                <label for="docId">Document ID:</label>
+                <input type="text" id="docId" placeholder="Enter document ID" value="doc1">
+            </div>
+            <div>
+                <label for="docTitle">Title:</label>
+                <input type="text" id="docTitle" placeholder="Enter document title" value="Rust Programming">
+            </div>
+            <div>
+                <label for="docBody">Body:</label>
+                <textarea id="docBody" placeholder="Enter document content">Rust is a systems programming language focused on safety and speed. It offers memory safety without garbage collection.</textarea>
+            </div>
+            <div>
+                <label for="docSource">Source:</label>
+                <input type="text" id="docSource" placeholder="Enter source" value="rust-lang.org">
+            </div>
+            <div>
+                <label for="docVersion">Version:</label>
+                <input type="text" id="docVersion" placeholder="Enter version (optional)" value="1.70">
+            </div>
+            <button id="addDocumentButton">Add Document</button>
+            <div id="addDocumentResponse" class="response"></div>
+        </div>
+
+        <div class="section">
+            <h2>Search Documents</h2>
+            <div>
+                <label for="searchQuery">Search Query:</label>
+                <input type="text" id="searchQuery" placeholder="Enter search query" value="Rust safety">
+            </div>
+            <div>
+                <label for="searchLimit">Limit Results:</label>
+                <input type="number" id="searchLimit" placeholder="Enter limit" value="5">
+            </div>
+            <button id="searchButton">Search Documents</button>
+            <div id="searchResponse" class="response"></div>
+            <div id="searchResults"></div>
+        </div>
     </div>
 
     <script>
         document.getElementById('pingButton').addEventListener('click', async () => {
-            const responseElement = document.getElementById('response');
+            const responseElement = document.getElementById('pingResponse');
             responseElement.style.display = 'block';
             responseElement.textContent = 'Sending ping request...';
+            
+            try {
+                // Create the request body
+                const requestBody = {
+                    jsonrpc: '2.0',
+                    method: 'ping',
+                    params: {
+                        message: 'Hello from MCP Docs Frontend'
+                    },
+                    id: 1
+                };
+                
+                // Log the request for debugging
+                console.log('Sending request:', JSON.stringify(requestBody, null, 2));
+                
+                const response = await fetch('http://localhost:3000/rpc', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                // Log response headers for debugging
+                console.log('Response headers:');
+                response.headers.forEach((value, key) => {
+                    console.log(`${key}: ${value}`);
+                });
+                
+                const data = await response.json();
+                console.log('Response received:', data);
+                responseElement.textContent = `Response: ${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                console.error('Error:', error);
+                responseElement.textContent = `Error: ${error.message}`;
+            }
+        });
+
+        document.getElementById('addDocumentButton').addEventListener('click', async () => {
+            const responseElement = document.getElementById('addDocumentResponse');
+            responseElement.style.display = 'block';
+            responseElement.textContent = 'Adding document...';
+            
+            const docId = document.getElementById('docId').value;
+            const docTitle = document.getElementById('docTitle').value;
+            const docBody = document.getElementById('docBody').value;
+            const docSource = document.getElementById('docSource').value;
+            const docVersion = document.getElementById('docVersion').value;
             
             try {
                 const response = await fetch('http://localhost:3000/rpc', {
@@ -77,16 +197,77 @@
                     },
                     body: JSON.stringify({
                         jsonrpc: '2.0',
-                        method: 'ping',
+                        method: 'addDocument',
                         params: {
-                            message: 'Hello from MCP Docs Frontend'
+                            document: {
+                                id: docId,
+                                title: docTitle,
+                                body: docBody,
+                                source: docSource,
+                                version: docVersion || null
+                            }
                         },
-                        id: 1
+                        id: 2
                     })
                 });
                 
                 const data = await response.json();
                 responseElement.textContent = `Response: ${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                responseElement.textContent = `Error: ${error.message}`;
+            }
+        });
+
+        document.getElementById('searchButton').addEventListener('click', async () => {
+            const responseElement = document.getElementById('searchResponse');
+            const resultsElement = document.getElementById('searchResults');
+            responseElement.style.display = 'block';
+            responseElement.textContent = 'Searching documents...';
+            resultsElement.innerHTML = '';
+            
+            const searchQuery = document.getElementById('searchQuery').value;
+            const searchLimit = parseInt(document.getElementById('searchLimit').value || '5');
+            
+            try {
+                const response = await fetch('http://localhost:3000/rpc', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'searchDocuments',
+                        params: {
+                            query: searchQuery,
+                            limit: searchLimit
+                        },
+                        id: 3
+                    })
+                });
+                
+                const data = await response.json();
+                responseElement.textContent = `Raw Response: ${JSON.stringify(data, null, 2)}`;
+                
+                // Display formatted results
+                if (data.result && data.result.documents) {
+                    const documents = data.result.documents;
+                    if (documents.length === 0) {
+                        resultsElement.innerHTML = '<p>No results found.</p>';
+                    } else {
+                        documents.forEach(doc => {
+                            const docElement = document.createElement('div');
+                            docElement.className = 'result-item';
+                            docElement.innerHTML = `
+                                <div class="result-title">${doc.title}</div>
+                                <div><strong>ID:</strong> ${doc.id}</div>
+                                <div><strong>Source:</strong> ${doc.source}</div>
+                                <div><strong>Version:</strong> ${doc.version || 'N/A'}</div>
+                                <div><strong>Content:</strong> ${doc.body}</div>
+                            `;
+                            resultsElement.appendChild(docElement);
+                        });
+                    }
+                }
             } catch (error) {
                 responseElement.textContent = `Error: ${error.message}`;
             }

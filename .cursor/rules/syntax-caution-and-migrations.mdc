@@ -1,0 +1,116 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Enforces careful syntax usage, tracks evolving code patterns, and maintains a self-documented migration log for Tauri 2.0, Rust, jsonrpsee, and Tantivy integration in the MCP Server project. Ensures Cursor-generated code is always up-to-date, cautious, and well-documented.
+globs: src/**/*, src-tauri/**/*, *.rs, *.json, *.ts
+alwaysApply: true
+---
+
+# Syntax Caution & Migration Tracking Rule
+
+## Purpose
+
+This rule ensures that all code written, generated, or modified in this project—especially involving **Tauri 2.0**, **Rust**, **jsonrpsee**, and **Tantivy**—follows the most accurate, up-to-date syntax. It also mandates the maintenance of a clear, versioned log of code migrations and syntax changes to prevent errors from outdated or unconfirmed patterns.
+
+---
+
+## 1. Syntax Vigilance
+
+- **Never assume syntax correctness for unfamiliar or recently changed APIs.**
+- **Always verify code snippets** against the latest official documentation or release notes for:
+  - Tauri 2.x
+  - Rust (stable channel)
+  - jsonrpsee
+  - Tantivy
+- If documentation is ambiguous or missing, **flag the code as "UNCONFIRMED"** in comments and request review before merging.
+
+---
+
+## 2. Self-Documented Migration Log
+
+- Maintain a file named `SYNTAX_MIGRATIONS.md` at the project root.
+- Every time you:
+  - Update a code snippet to match new syntax
+  - Replace deprecated patterns
+  - Discover a breaking change
+  - Migrate between major versions (e.g., Tauri 1.x → 2.x)
+- ...**add an entry** to `SYNTAX_MIGRATIONS.md` in this format:
+
+  ```
+  ## [YYYY-MM-DD] [Component/Library Name]
+  - **Old:** (brief code or pattern)
+  - **New:** (updated code or pattern)
+  - **Reason/Reference:** (link to docs, issue, or PR)
+  - **Impact:** (files/modules affected)
+  ```
+
+- Example:
+
+  ```
+  ## [2025-06-02] Tauri 2.0 Command Syntax
+  - **Old:** `tauri::Builder::default().invoke_handler(...)`
+  - **New:** `tauri::AppBuilder::new().invoke_handler(...)`
+  - **Reason/Reference:** [Tauri 2.0 Migration Guide]
+  - **Impact:** src-tauri/main.rs, src/commands.rs
+  ```
+
+---
+
+## 3. Cursor Code Generation Rules
+
+- **Cursor must always:**
+  - Double-check generated code for latest syntax and API changes.
+  - Prefer explicit, fully-qualified syntax when in doubt.
+  - Add inline comments if a snippet is based on an uncertain or recently changed API.
+  - Reference the relevant migration entry in `SYNTAX_MIGRATIONS.md` where applicable.
+
+---
+
+## 4. Review & Automation
+
+- **All PRs must be checked** for:
+  - Use of deprecated or outdated code patterns.
+  - Missing or incomplete migration log entries.
+  - Unconfirmed syntax (must be flagged and reviewed).
+- **Automated linting** should be configured to warn on known deprecated patterns if possible.
+
+---
+
+## 5. Scope
+
+- Applies to all Rust, TypeScript, and JSON files in `src/`, `src-tauri/`, and project root.
+- Mandatory for all code involving Tauri, Rust, jsonrpsee, Tantivy, and related integrations.
+
+---
+
+## 6. Example: Tantivy Document Addition
+
+```
+// Good: Uses correct value type, as per Tantivy 0.24.x docs
+doc! {
+    self.title_field => doc_to_add.title.as_str(),
+    self.body_field => doc_to_add.body.as_str(),
+}
+
+// Bad: Passes double reference, causes E0277 error
+doc! {
+    self.title_field => &doc_to_add.title,
+}
+```
+
+---
+
+## 7. File Placement
+
+- This rule file must reside in `.cursor/rules/syntax-caution-and-migrations.mdc`.
+- The migration log must be at `SYNTAX_MIGRATIONS.md` in the project root.
+
+---
+
+## 8. Enforcement
+
+- Cursor and all contributors must follow this rule.
+- Repeated violations or missing migration entries should be flagged in code review.

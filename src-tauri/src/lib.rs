@@ -1,24 +1,38 @@
 mod rpc;
+mod search;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
+use search::SearchService;
+use tempfile::tempdir;
 
 // Shared application state
 pub struct AppState {
-    // Example: could hold a Tantivy index writer, DB connection pool, etc.
-    // We'll populate this later.
+    pub search_service: Arc<SearchService>,
+    // Add more shared resources as needed
 }
 
 impl AppState {
-    fn new() -> Self {
-        Self {}
+    fn new() -> Result<Self, anyhow::Error> {
+        // For development, use a temporary directory for the index
+        // In production, you'd use a persistent path
+        let temp_dir = tempdir()?;
+        let index_dir = temp_dir.into_path();
+        
+        println!("Initializing Tantivy index at: {:?}", index_dir);
+        
+        let search_service = Arc::new(SearchService::new(index_dir)?);
+        
+        Ok(Self {
+            search_service,
+        })
     }
 }
 
-async fn run_axum_server(_app_state: Arc<AppState>) {
+async fn run_axum_server(app_state: Arc<AppState>) {
     // Create the RPC router
-    let rpc_router = rpc::create_rpc_router();
+    let rpc_router = rpc::create_rpc_router(Arc::clone(&app_state));
 
     // Configure CORS
     let cors = CorsLayer::new()
@@ -61,7 +75,14 @@ fn greet(name: &str) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize app state
-    let app_state = Arc::new(AppState::new());
+    let app_state = match AppState::new() {
+        Ok(state) => Arc::new(state),
+        Err(err) => {
+            eprintln!("Failed to initialize app state: {}", err);
+            return;
+        }
+    };
+    
     let app_state_clone = Arc::clone(&app_state);
 
     tauri::Builder::default()

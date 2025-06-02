@@ -1,0 +1,453 @@
+# Rust Syntax and Common Issues Reference
+
+## Tantivy Document Handling
+
+### Creating Documents
+```rust
+// Using the doc! macro to create documents
+let doc = doc!(
+    field1 => value1,
+    field2 => value2
+);
+
+// IMPORTANT: Values must be owned or properly referenced
+// CORRECT: Clone strings to avoid reference issues
+let doc = doc!(
+    self.id_field => doc_to_add.id.clone(),
+    self.title_field => doc_to_add.title.clone()
+);
+
+// INCORRECT: Double reference issue
+// This will cause: "the trait bound `&&std::string::String: tantivy::schema::Value<'_>` is not satisfied"
+let doc = doc!(
+    self.version_field => &version // Double reference!
+);
+
+// CORRECT: Clone the string to pass by value
+let doc = doc!(
+    self.version_field => version.clone()
+);
+```
+
+### Adding Documents
+```rust
+// INCORRECT: add_text() returns (), not the modified document
+index_writer.add_document(doc.add_text(self.field, value))?;
+
+// CORRECT: Modify document first, then add it
+doc.add_text(self.field, value);
+index_writer.add_document(doc)?;
+
+// BETTER: Use doc! macro with all fields at once
+index_writer.add_document(doc!(
+    self.field1 => value1,
+    self.field2 => value2
+))?;
+```
+
+### Retrieving Documents
+```rust
+// IMPORTANT: Type annotation needed for searcher.doc()
+let retrieved_doc: tantivy::Document = searcher.doc(doc_address)?;
+
+// Accessing field values
+// INCORRECT: as_text() doesn't exist
+retrieved_doc.get_first(field).and_then(|v| v.as_text())
+
+// CORRECT: Use as_str() for text values
+retrieved_doc.get_first(field)
+    .and_then(|v| v.as_str())
+    .unwrap_or_default()
+    .to_string()
+```
+
+## Tauri and Tempfile Handling
+
+### Temporary Directory Management
+```rust
+// DEPRECATED: into_path() is deprecated
+let index_dir = temp_dir.into_path();
+
+// INCORRECT: keep() returns PathBuf, not Result
+temp_dir.keep().map_err(|e| anyhow::anyhow!("Failed to keep temp directory: {}", e))?;
+
+// CORRECT: Just use into_path() if you need to keep the directory
+// (Despite being deprecated, it's still the simplest approach)
+let index_dir = temp_dir.into_path();
+
+// Alternative approach
+let index_dir = temp_dir.path().to_owned();
+let _ = temp_dir.keep(); // Ignore the result
+```
+
+## Tokio and Async Code
+
+### Thread-Safe Mutex
+```rust
+// INCORRECT: std::sync::Mutex isn't Send across .await points
+use std::sync::Mutex;
+let module = Arc::new(Mutex::new(value));
+// Later in async code:
+let guard = module.lock().expect("Failed to lock");
+let result = async_operation().await; // ERROR: MutexGuard isn't Send
+
+// CORRECT: Use tokio::sync::Mutex for async code
+use tokio::sync::Mutex;
+let module = Arc::new(Mutex::new(value));
+// Later in async code:
+let guard = module.lock().await;
+let result = async_operation().await; // Works fine
+```
+
+## Common Rust Patterns
+
+### Type Annotations
+```rust
+// When type inference fails, add explicit types
+let retrieved_doc: Document = searcher.doc(doc_address)?;
+
+// For complex return types, use type annotations
+let result: Result<Vec<SearchableDocument>, anyhow::Error> = search_function();
+```
+
+### Mutable Variables
+```rust
+// Only use mut when needed
+// INCORRECT: Unnecessary mut
+let mut doc = doc!(...); // If doc isn't modified later
+
+// CORRECT: No mut if not modified
+let doc = doc!(...);
+```
+
+### Error Handling
+```rust
+// Using ? operator for Result propagation
+let result = fallible_operation()?;
+
+// Converting errors with map_err
+let result = operation().map_err(|e| anyhow::anyhow!("Operation failed: {}", e))?;
+
+// IMPORTANT: map_err only works on Result types, not on regular values
+```
+
+### Cloning and References
+```rust
+// Clone when passing owned values
+index_writer.add_document(doc!(
+    field => value.clone()
+))?;
+
+// Use Arc for shared ownership across threads
+let shared_state = Arc::new(AppState::new()?);
+let state_clone = Arc::clone(&shared_state); // Prefer Arc::clone over shared_state.clone()
+```
+
+### JSON-RPC and Axum Integration
+```rust
+// For types used in RPC, derive Clone when needed
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SearchResponse {
+    pub documents: Vec<SearchableDocument>,
+}
+
+// IMPORTANT: JSON-RPC requires proper parameter format
+// INCORRECT: Missing params field in request
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "ping"
+}
+
+// CORRECT: Include params object even if empty
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "ping",
+  "params": {}
+}
+
+// CORRECT: With parameters
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "addDocument",
+  "params": {
+    "document": {
+      "id": "doc1",
+      "title": "Test Document",
+      "body": "This is a test document",
+      "source": "manual",
+      "version": "1.0"
+    }
+  }
+}
+
+// For search
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "searchDocuments",
+  "params": {
+    "query": "test",
+    "limit": 10
+  }
+}
+```
+
+## Tantivy-Specific Notes
+
+1. The `doc!` macro expects owned values or proper references, not double references
+2. `searcher.doc()` needs type annotation: `searcher.doc::<Document>(doc_address)?`
+3. Use `as_str()` not `as_text()` to extract string values from documents
+4. Document modification methods like `add_text()` modify in place and return `()`
+
+## Tauri-Specific Notes
+
+1. Use `tauri::async_runtime::spawn()` to run async tasks in Tauri
+2. Handle temporary directories properly to avoid cleanup issues
+
+## Common Errors and Solutions
+
+### Duplicate Tauri Command Definition
+
+**Error:**
+```
+error[E0255]: the name `__cmd__process_rust_file_command` is defined multiple times
+  --> src/lib.rs:35:14
+   |
+34 | #[tauri::command]
+   | ----------------- previous definition of the macro `__cmd__process_rust_file_command` here
+35 | pub async fn process_rust_file_command(path: String) -> Result<FileProcessResponse, String> {
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^ `__cmd__process_rust_file_command` reimported here
+```
+
+**Solution:**
+Separate command implementations into a dedicated module:
+
+```rust
+// src-tauri/src/commands.rs
+#[tauri::command]
+pub async fn process_rust_file_command(path: String) -> Result<FileProcessResponse, String> {
+    // Implementation
+}
+
+// src-tauri/src/lib.rs
+mod commands;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            commands::process_rust_file_command
+        ])
+}
+```
+
+### Unused Imports and Variables Warnings
+
+**Warning:**
+```
+warning: unused imports: `File as SynFile` and `self`
+ --> src/lib.rs:3:11
+  |
+3 | use syn::{File as SynFile, visit_mut::{self, VisitMut}}; // Renamed syn::File to SynFile
+  |           ^^^^^^^^^^^^^^^              ^^^^
+```
+
+**Solution:**
+Clean up imports and prefix unused variables with underscore:
+
+```rust
+// Before
+use syn::{File as SynFile, visit_mut::{self, VisitMut}};
+fn visit_item_mut(&mut self, i: &mut syn::Item) {
+    // ...
+}
+
+// After
+use syn::{visit_mut::VisitMut};
+fn visit_item_mut(&mut self, _i: &mut syn::Item) {
+    // ...
+}
+```
+
+### Rust Dependency Missing Features
+
+**Error:**
+When using the `syn` crate without the required features.
+
+**Solution:**
+Add the required features to the dependency in Cargo.toml:
+
+```toml
+[dependencies]
+syn = { version = "2.0", features = ["full", "visit-mut"] }
+```
+
+### ReturnType Debug Implementation Missing
+
+**Error:**
+```
+error[E0277]: `ReturnType` doesn't implement `std::fmt::Debug`
+  --> src/ast_processor.rs:78:13
+   |
+78 |             i.sig.output
+   |             ^^^^^^^^^^^^ `ReturnType` cannot be formatted using `{:?}`
+```
+
+**Solution:**
+Create a custom string representation without using Debug:
+
+```rust
+let return_type_str = match &i.sig.output {
+    syn::ReturnType::Default => "()".to_string(),
+    syn::ReturnType::Type(_, ty) => "...".to_string(), // Custom handling
+};
+```
+
+### Tauri 2.x Capability Configuration Error
+
+**Error:**
+```
+Error: proc macro panicked
+  --> src/lib.rs:26:14
+   |
+26 |         .run(tauri::generate_context!())
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: message: called `Result::unwrap()` on an `Err` value: capability with identifier core:all not found
+```
+
+**Solution:**
+Use plugin-based configuration instead of capabilities:
+
+```json
+{
+  "plugins": {
+    "fs": {
+      "all": true,
+      "scope": ["**"]
+    },
+    "dialog": {
+      "all": true
+    },
+    "path": {
+      "all": true
+    }
+  }
+}
+```
+
+### Tauri API Feature Flag Error
+
+**Error:**
+```
+error: failed to select a version for `tauri`.
+    ... required by package `app v0.1.0 (/Users/chamaththiwanka/Desktop/Projects/iCode/src-tauri)`
+versions that meet the requirements `^2.5.1` (locked to 2.5.1) are: 2.5.1
+
+the package `app` depends on `tauri`, with features: `api-all` but `tauri` does not have these features.
+```
+
+**Solution:**
+Tauri 2.x uses a different feature system:
+
+```toml
+# Before (incorrect)
+[dependencies]
+tauri = { version = "2.5.1", features = ["api-all"] }
+
+# After (fixed)
+[dependencies]
+tauri = { version = "2.5.1", features = [] }
+```
+
+### Document Trait vs Type Error
+
+**Error:**
+```
+error[E0782]: expected a type, found a trait
+  --> src/search.rs:106:32
+   |
+106 |             let retrieved_doc: tantivy::schema::Document = searcher.doc(doc_address)?;
+   |                                ^^^^^^^^
+```
+
+**Solution:**
+Use the concrete type instead of the trait:
+
+```rust
+// INCORRECT: Document is a trait, not a type
+let retrieved_doc: tantivy::schema::Document = searcher.doc(doc_address)?;
+
+// CORRECT: Use the concrete type or type parameter
+let retrieved_doc = searcher.doc(doc_address)?;
+
+// OR use the generic version with TantivyDocument
+let retrieved_doc = searcher.doc::<tantivy::TantivyDocument>(doc_address)?;
+```
+
+### JSON-RPC Invalid Params Error
+
+**Error:**
+```
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": "missing field `params` at line 1 column 42"
+  }
+}
+```
+
+**Solution:**
+Always include the `params` field in your JSON-RPC requests, even if it's empty:
+
+```javascript
+// Frontend JavaScript/TypeScript
+// INCORRECT
+const response = await fetch('/rpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'ping'
+  })
+});
+
+// CORRECT
+const response = await fetch('/rpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'ping',
+    params: {} // Include empty params object
+  })
+});
+
+// With parameters
+const response = await fetch('/rpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'addDocument',
+    params: {
+      document: {
+        id: "doc1",
+        title: "Test Document",
+        body: "This is a test document",
+        source: "manual",
+        version: "1.0"
+      }
+    }
+  })
+});
+```
