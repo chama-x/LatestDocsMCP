@@ -3,93 +3,170 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCP Documentation Server</title>
+    <title>CH-MCP Dashboard</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             margin: 0;
             padding: 0;
             background-color: #f5f5f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
+            color: #333;
+        }
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 1rem;
+            text-align: center;
         }
         .container {
-            background-color: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            max-width: 800px;
-            width: 100%;
-        }
-        h1 {
-            color: #333;
-            margin-top: 0;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1rem;
-            margin-top: 1rem;
-        }
-        button:hover {
-            background-color: #45a049;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
         }
         .section {
-            margin-top: 2rem;
-            padding: 1rem;
-            background-color: #f9f9f9;
-            border-radius: 4px;
+            background-color: white;
+            border-radius: 5px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .response {
-            margin-top: 1rem;
-            padding: 1rem;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            border-left: 4px solid #4CAF50;
-            font-family: monospace;
-            white-space: pre-wrap;
-            display: none;
+        h1, h2 {
+            margin-top: 0;
         }
-        textarea, input {
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+        input, textarea {
             width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
+            padding: 0.5rem;
+            margin-bottom: 1rem;
             border: 1px solid #ddd;
             border-radius: 4px;
             box-sizing: border-box;
         }
         textarea {
-            height: 100px;
-            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
         }
-        .result-item {
-            margin-bottom: 10px;
-            padding: 10px;
-            background-color: #f0f0f0;
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
             border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
         }
-        .result-title {
-            font-weight: bold;
-            margin-bottom: 5px;
+        button:hover {
+            background-color: #2980b9;
+        }
+        .response {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #f9f9f9;
+            border-left: 4px solid #3498db;
+            display: none;
+        }
+        .search-result {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 4px solid #2ecc71;
+        }
+        .search-result h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .search-result p {
+            margin-bottom: 0.5rem;
+        }
+        .search-result .meta {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+        }
+        .status {
+            display: flex;
+            justify-content: space-between;
+            background-color: #ecf0f1;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+        }
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        .status-online {
+            background-color: #2ecc71;
+        }
+        .status-offline {
+            background-color: #e74c3c;
+        }
+        .note {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            display: none;
+        }
+        .debug-info {
+            background-color: #f0f8ff;
+            border: 1px solid #add8e6;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow: auto;
         }
     </style>
+    <script type="module">
+        // Try to load the Tauri API in a modern way (ES modules)
+        try {
+            // Use '__TAURI_INTERNALS__' module path for Tauri 2.x
+            const module = await import('__TAURI_INTERNALS__');
+            window.__TAURI__ = module;
+            console.log('Tauri API successfully imported via module!');
+        } catch (e) {
+            console.warn('Could not import Tauri API module:', e);
+        }
+    </script>
 </head>
 <body>
+    <header>
+        <h1>CH-MCP Dashboard</h1>
+    </header>
+
     <div class="container">
-        <h1>MCP Documentation Server</h1>
-        <p>Welcome to the MCP Documentation Server. This is a Tauri application with an embedded Axum server, jsonrpsee RPC service, and Tantivy search integration.</p>
+        <div id="tauriNote" class="note">
+            This application needs to be run in a Tauri environment. Features will be limited in browser mode.
+        </div>
+        
+        <div id="debugInfo" class="debug-info">Checking Tauri environment...</div>
         
         <div class="section">
-            <h2>Test the RPC Service</h2>
-            <p>Click the button below to test the RPC ping method:</p>
-            <button id="pingButton">Test Ping RPC</button>
+            <h2>System Status</h2>
+            <div class="status">
+                <div class="status-item">
+                    <div id="backendStatus" class="status-indicator status-offline"></div>
+                    <span>Backend Service</span>
+                </div>
+                <div class="status-item">
+                    <div id="searchStatus" class="status-indicator status-offline"></div>
+                    <span>Search Engine</span>
+                </div>
+            </div>
+            <button id="pingButton">Check Connection</button>
             <div id="pingResponse" class="response"></div>
         </div>
 
@@ -136,142 +213,284 @@
     </div>
 
     <script>
-        document.getElementById('pingButton').addEventListener('click', async () => {
-            const responseElement = document.getElementById('pingResponse');
-            responseElement.style.display = 'block';
-            responseElement.textContent = 'Sending ping request...';
+        // Enhanced Tauri detection and debugging
+        document.addEventListener('DOMContentLoaded', () => {
+            const debugInfo = document.getElementById('debugInfo');
+            
+            // Mock API for testing in browser
+            const mockApi = {
+                invoke: async (cmd, args) => {
+                    console.log(`Mock invoke: ${cmd}`, args);
+                    if (cmd === 'ping') {
+                        return { reply: 'MOCK: Pong response' };
+                    }
+                    if (cmd === 'add_document') {
+                        return `MOCK: Document ${args.params.document.id} added successfully`;
+                    }
+                    if (cmd === 'search_documents') {
+                        return { 
+                            documents: [
+                                { 
+                                    id: 'mock-1', 
+                                    title: 'Mock Document', 
+                                    body: 'This is a mock search result since you are running outside Tauri', 
+                                    source: 'mock-source',
+                                    version: '1.0' 
+                                }
+                            ] 
+                        };
+                    }
+                    return 'Mock response';
+                },
+                listen: async (event, callback) => {
+                    console.log(`Mock listen: ${event}`);
+                    return () => {};
+                }
+            };
+            
+            // Advanced detection for Tauri API (with multiple fallbacks)
+            function detectTauriApi() {
+                // Wait a moment for potential dynamic injection
+                setTimeout(() => {
+                    // Detailed debug info
+                    const windowProps = Object.getOwnPropertyNames(window).join(", ");
+                    const hasDocumentListeners = document.eventListeners !== undefined;
+                    const navigatorInfo = JSON.stringify({
+                        userAgent: navigator.userAgent,
+                        platform: navigator.platform,
+                        vendor: navigator.vendor
+                    });
+                    
+                    debugInfo.textContent = `
+Advanced Tauri Detection Debug:
+- window.__TAURI__ exists: ${window.__TAURI__ !== undefined}
+- window.__TAURI_INTERNALS__ exists: ${window.__TAURI_INTERNALS__ !== undefined}
+- window.tauri exists: ${window.tauri !== undefined}
+- window object has properties: ${windowProps.substring(0, 100)}...
+- document has event listeners: ${hasDocumentListeners}
+- navigator info: ${navigatorInfo}
+                    
+Looking for Tauri API...`;
+                    
+                    // Try different ways of accessing Tauri
+                    if (window.__TAURI__) {
+                        debugInfo.textContent += '\n__TAURI__ global found!';
+                        
+                        // Check for Tauri 1.x or 2.x format
+                        const invoke = window.__TAURI__.invoke || 
+                                    (window.__TAURI__.tauri && window.__TAURI__.tauri.invoke);
+                        
+                        const listen = window.__TAURI__.event && 
+                                     (window.__TAURI__.event.listen || window.__TAURI__.event.on);
+                        
+                        if (invoke) {
+                            debugInfo.textContent += '\nFound Tauri invoke method!';
+                            
+                            const api = { 
+                                invoke, 
+                                listen: listen || (() => Promise.resolve(() => {}))
+                            };
+                            
+                            initApp(api, true);
+                            return;
+                        }
+                    } 
+                    
+                    // Try window.tauri (Tauri 2.x)
+                    if (window.tauri) {
+                        debugInfo.textContent += '\nFound window.tauri object!';
+                        
+                        if (typeof window.tauri.invoke === 'function') {
+                            const api = {
+                                invoke: window.tauri.invoke,
+                                listen: window.tauri.listen || (() => Promise.resolve(() => {}))
+                            };
+                            
+                            initApp(api, true);
+                            return;
+                        }
+                    }
+                    
+                    // Try __TAURI_INTERNALS__ (Tauri 2.x)
+                    if (window.__TAURI_INTERNALS__) {
+                        debugInfo.textContent += '\nFound __TAURI_INTERNALS__ module!';
+                        
+                        const invoke = window.__TAURI_INTERNALS__.invoke;
+                        
+                        if (invoke) {
+                            const api = {
+                                invoke,
+                                listen: window.__TAURI_INTERNALS__.listen || 
+                                       (() => Promise.resolve(() => {}))
+                            };
+                            
+                            initApp(api, true);
+                            return;
+                        }
+                    }
+                    
+                    // Fallback to mock
+                    document.getElementById('tauriNote').style.display = 'block';
+                    debugInfo.textContent += '\n\nNo working Tauri API found, using mock API.';
+                    initApp(mockApi, false);
+                }, 100); // Short delay to let potential dynamic injections complete
+            }
             
             try {
-                // Create the request body
-                const requestBody = {
-                    jsonrpc: '2.0',
-                    method: 'ping',
-                    params: {
-                        message: 'Hello from MCP Docs Frontend'
-                    },
-                    id: 1
-                };
-                
-                // Log the request for debugging
-                console.log('Sending request:', JSON.stringify(requestBody, null, 2));
-                
-                const response = await fetch('http://localhost:3000/rpc', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(requestBody)
-                });
-                
-                // Log response headers for debugging
-                console.log('Response headers:');
-                response.headers.forEach((value, key) => {
-                    console.log(`${key}: ${value}`);
-                });
-                
-                const data = await response.json();
-                console.log('Response received:', data);
-                responseElement.textContent = `Response: ${JSON.stringify(data, null, 2)}`;
+                detectTauriApi();
             } catch (error) {
-                console.error('Error:', error);
-                responseElement.textContent = `Error: ${error.message}`;
+                console.error("Failed to initialize:", error);
+                document.getElementById('tauriNote').style.display = 'block';
+                debugInfo.textContent += `\nError initializing app: ${error.message || error}. Using mock API.`;
+                initApp(mockApi, false);
             }
         });
-
-        document.getElementById('addDocumentButton').addEventListener('click', async () => {
-            const responseElement = document.getElementById('addDocumentResponse');
-            responseElement.style.display = 'block';
-            responseElement.textContent = 'Adding document...';
+        
+        function initApp(api, isRealTauri) {
+            const debugInfo = document.getElementById('debugInfo');
+            debugInfo.textContent += `\n\nInitializing app with ${isRealTauri ? 'REAL' : 'MOCK'} Tauri API`;
             
-            const docId = document.getElementById('docId').value;
-            const docTitle = document.getElementById('docTitle').value;
-            const docBody = document.getElementById('docBody').value;
-            const docSource = document.getElementById('docSource').value;
-            const docVersion = document.getElementById('docVersion').value;
-            
+            // Extract API methods with more robust error handling
+            let invoke, listen;
             try {
-                const response = await fetch('http://localhost:3000/rpc', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        jsonrpc: '2.0',
-                        method: 'addDocument',
+                invoke = api.invoke;
+                listen = api.listen;
+                
+                if (typeof invoke !== 'function') {
+                    throw new Error('invoke is not a function');
+                }
+                
+                debugInfo.textContent += `\nAPI methods look good!`;
+            } catch (error) {
+                debugInfo.textContent += `\nError extracting API methods: ${error}`;
+                // Switch to mock API in case of error
+                invoke = mockApi.invoke;
+                listen = mockApi.listen;
+            }
+
+            // Ping functionality
+            document.getElementById('pingButton').addEventListener('click', async () => {
+                await checkConnection();
+            });
+
+            async function checkConnection() {
+                const responseElement = document.getElementById('pingResponse');
+                responseElement.style.display = 'block';
+                responseElement.textContent = 'Checking connection...';
+                debugInfo.textContent += '\nAttempting to invoke ping...';
+                
+                try {
+                    const response = await invoke('ping', {
+                        params: {
+                            message: 'Connection test from dashboard'
+                        }
+                    });
+                    
+                    debugInfo.textContent += `\nPing succeeded: ${JSON.stringify(response)}`;
+                    responseElement.textContent = `Server responded: ${response.reply}`;
+                    document.getElementById('backendStatus').className = 'status-indicator status-online';
+                    document.getElementById('searchStatus').className = 'status-indicator status-online';
+                } catch (error) {
+                    debugInfo.textContent += `\nPing failed: ${error}`;
+                    responseElement.textContent = `Error: ${error.message || error}`;
+                    document.getElementById('backendStatus').className = 'status-indicator status-offline';
+                    document.getElementById('searchStatus').className = 'status-indicator status-offline';
+                }
+            }
+
+            // Add document functionality
+            document.getElementById('addDocumentButton').addEventListener('click', async () => {
+                const responseElement = document.getElementById('addDocumentResponse');
+                responseElement.style.display = 'block';
+                responseElement.textContent = 'Adding document...';
+                
+                const docId = document.getElementById('docId').value;
+                const docTitle = document.getElementById('docTitle').value;
+                const docBody = document.getElementById('docBody').value;
+                const docSource = document.getElementById('docSource').value;
+                const docVersion = document.getElementById('docVersion').value;
+                
+                if (!docId || !docTitle || !docBody || !docSource) {
+                    responseElement.textContent = 'Error: All fields except version are required';
+                    return;
+                }
+                
+                try {
+                    const response = await invoke('add_document', {
                         params: {
                             document: {
                                 id: docId,
                                 title: docTitle,
                                 body: docBody,
                                 source: docSource,
-                                version: docVersion || null
+                                version: docVersion
                             }
-                        },
-                        id: 2
-                    })
-                });
-                
-                const data = await response.json();
-                responseElement.textContent = `Response: ${JSON.stringify(data, null, 2)}`;
-            } catch (error) {
-                responseElement.textContent = `Error: ${error.message}`;
-            }
-        });
+                        }
+                    });
+                    
+                    responseElement.textContent = response;
+                } catch (error) {
+                    responseElement.textContent = `Error: ${error.message || error}`;
+                }
+            });
 
-        document.getElementById('searchButton').addEventListener('click', async () => {
-            const responseElement = document.getElementById('searchResponse');
-            const resultsElement = document.getElementById('searchResults');
-            responseElement.style.display = 'block';
-            responseElement.textContent = 'Searching documents...';
-            resultsElement.innerHTML = '';
-            
-            const searchQuery = document.getElementById('searchQuery').value;
-            const searchLimit = parseInt(document.getElementById('searchLimit').value || '5');
-            
-            try {
-                const response = await fetch('http://localhost:3000/rpc', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        jsonrpc: '2.0',
-                        method: 'searchDocuments',
+            // Search documents functionality
+            document.getElementById('searchButton').addEventListener('click', async () => {
+                const responseElement = document.getElementById('searchResponse');
+                const resultsElement = document.getElementById('searchResults');
+                responseElement.style.display = 'block';
+                responseElement.textContent = 'Searching documents...';
+                resultsElement.innerHTML = '';
+                
+                const searchQuery = document.getElementById('searchQuery').value;
+                const searchLimit = parseInt(document.getElementById('searchLimit').value || '5');
+                
+                try {
+                    const response = await invoke('search_documents', {
                         params: {
                             query: searchQuery,
                             limit: searchLimit
-                        },
-                        id: 3
-                    })
-                });
-                
-                const data = await response.json();
-                responseElement.textContent = `Raw Response: ${JSON.stringify(data, null, 2)}`;
-                
-                // Display formatted results
-                if (data.result && data.result.documents) {
-                    const documents = data.result.documents;
-                    if (documents.length === 0) {
-                        resultsElement.innerHTML = '<p>No results found.</p>';
-                    } else {
-                        documents.forEach(doc => {
-                            const docElement = document.createElement('div');
-                            docElement.className = 'result-item';
-                            docElement.innerHTML = `
-                                <div class="result-title">${doc.title}</div>
-                                <div><strong>ID:</strong> ${doc.id}</div>
-                                <div><strong>Source:</strong> ${doc.source}</div>
-                                <div><strong>Version:</strong> ${doc.version || 'N/A'}</div>
-                                <div><strong>Content:</strong> ${doc.body}</div>
-                            `;
-                            resultsElement.appendChild(docElement);
-                        });
+                        }
+                    });
+                    
+                    responseElement.textContent = `Found ${response.documents.length} document(s)`;
+                    
+                    // Display formatted results
+                    response.documents.forEach(doc => {
+                        const resultElement = document.createElement('div');
+                        resultElement.className = 'search-result';
+                        
+                        resultElement.innerHTML = `
+                            <h3>${doc.title}</h3>
+                            <p>${doc.body.substring(0, 200)}${doc.body.length > 200 ? '...' : ''}</p>
+                            <div class="meta">
+                                <span>ID: ${doc.id}</span> | 
+                                <span>Source: ${doc.source}</span>
+                                ${doc.version ? ` | <span>Version: ${doc.version}</span>` : ''}
+                            </div>
+                        `;
+                        
+                        resultsElement.appendChild(resultElement);
+                    });
+                    
+                    if (response.documents.length === 0) {
+                        resultsElement.innerHTML = '<p>No documents found matching your query.</p>';
                     }
+                } catch (error) {
+                    responseElement.textContent = `Error: ${error.message || error}`;
                 }
-            } catch (error) {
-                responseElement.textContent = `Error: ${error.message}`;
+            });
+            
+            // Run initial check
+            if (isRealTauri) {
+                debugInfo.textContent += '\nRunning initial connection check...';
+                setTimeout(checkConnection, 500);
+            } else {
+                debugInfo.textContent += '\nIn mock mode - not running connection check';
+                document.getElementById('backendStatus').className = 'status-indicator status-offline';
+                document.getElementById('searchStatus').className = 'status-indicator status-offline';
             }
-        });
+        }
     </script>
 </body>
 </html> 

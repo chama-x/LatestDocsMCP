@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON-RPC Debug Page</title>
+    <title>Tauri IPC Debug Page</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -38,29 +38,37 @@
             font-family: monospace;
             margin-bottom: 10px;
         }
+        .note {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            display: none;
+        }
     </style>
 </head>
 <body>
-    <h1>JSON-RPC Debug Tool</h1>
-    <p>This page allows you to send custom JSON-RPC requests for debugging.</p>
+    <h1>Tauri IPC Debug Tool</h1>
+    <p>This page allows you to test Tauri commands and events.</p>
+
+    <div id="tauriNote" class="note">
+        This application needs to be run in a Tauri environment. Mock mode activated.
+    </div>
 
     <div class="test-section">
-        <h2>Custom JSON-RPC Request</h2>
+        <h2>Custom Command Request</h2>
         <textarea id="requestJson">{
-  "jsonrpc": "2.0",
-  "method": "ping",
+  "command": "ping",
   "params": {
     "message": "Hello from debug tool"
-  },
-  "id": 1
+  }
 }</textarea>
         <div>
             <button id="sendRequest">Send Request</button>
         </div>
         <h3>Raw Request Sent:</h3>
         <pre id="rawRequest"></pre>
-        <h3>Response Headers:</h3>
-        <pre id="responseHeaders"></pre>
         <h3>Response:</h3>
         <pre id="responseResult"></pre>
     </div>
@@ -72,62 +80,147 @@
         <button id="searchTest">Test Search</button>
     </div>
 
+    <div class="test-section">
+        <h2>Event Listeners</h2>
+        <button id="listenEvents">Start Listening</button>
+        <button id="emitEvent">Emit Test Event</button>
+        <button id="runTask">Run Background Task</button>
+        <h3>Events Received:</h3>
+        <pre id="eventsLog"></pre>
+    </div>
+
     <script>
-        async function sendJsonRpc(requestBody) {
-            document.getElementById('rawRequest').textContent = JSON.stringify(requestBody, null, 2);
+        document.addEventListener('DOMContentLoaded', () => {
+            // Mock API for testing in browser
+            const mockApi = {
+                invoke: async (cmd, args) => {
+                    console.log(`Mock invoke: ${cmd}`, args);
+                    if (cmd === 'ping') {
+                        return { reply: 'MOCK: Pong response' };
+                    }
+                    if (cmd === 'add_document') {
+                        return `MOCK: Document ${args.document.id} added successfully`;
+                    }
+                    if (cmd === 'search_documents') {
+                        return { 
+                            documents: [
+                                { 
+                                    id: 'mock-1', 
+                                    title: 'Mock Document', 
+                                    body: 'This is a mock search result since you are running outside Tauri', 
+                                    source: 'mock-source',
+                                    version: '1.0' 
+                                }
+                            ] 
+                        };
+                    }
+                    if (cmd === 'emit_event_example') {
+                        setTimeout(() => {
+                            document.getElementById('eventsLog').textContent += 
+                                "\nMOCK: Received custom-event: \"Event payload\"";
+                        }, 500);
+                        return {};
+                    }
+                    if (cmd === 'run_background_task') {
+                        let count = 0;
+                        const interval = setInterval(() => {
+                            document.getElementById('eventsLog').textContent += 
+                                `\nMOCK: Progress: ${count}`;
+                            count++;
+                            if (count > 10) {
+                                clearInterval(interval);
+                                document.getElementById('eventsLog').textContent += 
+                                    "\nMOCK: Task completed: true";
+                            }
+                        }, 500);
+                        return {};
+                    }
+                    return 'Mock response';
+                },
+                listen: async (event, callback) => {
+                    console.log(`Mock listen: ${event}`);
+                    // For mock purposes, we'll simulate some events when listen is called
+                    if (event === 'custom-event') {
+                        setTimeout(() => {
+                            callback({ payload: "Mock event payload" });
+                        }, 1000);
+                    }
+                    // Return a mock unlisten function
+                    return () => {};
+                },
+                emit: async (event, payload) => {
+                    console.log(`Mock emit: ${event}`, payload);
+                    return;
+                }
+            };
+            
+            // Get the API - either real Tauri or our mock
+            let tauriApi;
+            let isRealTauri = false;
             
             try {
-                const response = await fetch('http://localhost:3000/rpc', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(requestBody)
-                });
+                // Check if running in Tauri
+                if (window.__TAURI__) {
+                    tauriApi = {
+                        invoke: window.__TAURI__.core.invoke,
+                        listen: window.__TAURI__.event.listen,
+                        emit: window.__TAURI__.event.emit
+                    };
+                    isRealTauri = true;
+                    console.log("Running in Tauri environment");
+                } else {
+                    // Show warning but continue with mock API
+                    document.getElementById('tauriNote').style.display = 'block';
+                    tauriApi = mockApi;
+                    console.log("Running in browser with mock API");
+                }
                 
-                // Display headers
-                const headerDisplay = document.getElementById('responseHeaders');
-                headerDisplay.textContent = '';
-                response.headers.forEach((value, key) => {
-                    headerDisplay.textContent += `${key}: ${value}\n`;
-                });
-                
-                const data = await response.json();
-                document.getElementById('responseResult').textContent = JSON.stringify(data, null, 2);
-                return data;
+                initApp(tauriApi, isRealTauri);
             } catch (error) {
-                document.getElementById('responseResult').textContent = `Error: ${error.message}`;
+                console.error("Failed to initialize:", error);
+                document.getElementById('tauriNote').style.display = 'block';
+                document.getElementById('tauriNote').textContent = 
+                    `Error initializing app: ${error.message || error}. Using mock API.`;
+                initApp(mockApi, false);
             }
-        }
+        });
+        
+        function initApp(api, isRealTauri) {
+            const { invoke, listen, emit } = api;
+            
+            async function sendTauriCommand(command, params) {
+                document.getElementById('rawRequest').textContent = JSON.stringify({command, params}, null, 2);
+                
+                try {
+                    const result = await invoke(command, params);
+                    document.getElementById('responseResult').textContent = JSON.stringify(result, null, 2);
+                    return result;
+                } catch (error) {
+                    document.getElementById('responseResult').textContent = `Error: ${error.message || error}`;
+                    throw error;
+                }
+            }
 
-        // Custom request
-        document.getElementById('sendRequest').addEventListener('click', async () => {
-            const textArea = document.getElementById('requestJson');
-            try {
-                const requestBody = JSON.parse(textArea.value);
-                await sendJsonRpc(requestBody);
-            } catch (e) {
-                document.getElementById('responseResult').textContent = `Error parsing JSON: ${e.message}`;
-            }
-        });
-        
-        // Quick tests
-        document.getElementById('pingTest').addEventListener('click', async () => {
-            await sendJsonRpc({
-                jsonrpc: '2.0',
-                method: 'ping',
-                params: {
-                    message: 'Quick ping test'
-                },
-                id: Date.now()
+            // Custom request
+            document.getElementById('sendRequest').addEventListener('click', async () => {
+                const textArea = document.getElementById('requestJson');
+                try {
+                    const requestBody = JSON.parse(textArea.value);
+                    await sendTauriCommand(requestBody.command, requestBody.params);
+                } catch (e) {
+                    document.getElementById('responseResult').textContent = `Error: ${e.message || e}`;
+                }
             });
-        });
-        
-        document.getElementById('addDocTest').addEventListener('click', async () => {
-            await sendJsonRpc({
-                jsonrpc: '2.0',
-                method: 'addDocument',
-                params: {
+            
+            // Quick tests
+            document.getElementById('pingTest').addEventListener('click', async () => {
+                await sendTauriCommand('ping', {
+                    message: 'Quick ping test'
+                });
+            });
+            
+            document.getElementById('addDocTest').addEventListener('click', async () => {
+                await sendTauriCommand('add_document', {
                     document: {
                         id: 'debug-doc-1',
                         title: 'Debug Document',
@@ -135,23 +228,47 @@
                         source: 'debug-page',
                         version: '1.0'
                     }
-                },
-                id: Date.now()
+                });
             });
-        });
-        
-        document.getElementById('searchTest').addEventListener('click', async () => {
-            await sendJsonRpc({
-                jsonrpc: '2.0',
-                method: 'searchDocuments',
-                params: {
+            
+            document.getElementById('searchTest').addEventListener('click', async () => {
+                await sendTauriCommand('search_documents', {
                     query: 'debug',
                     limit: 5
-                },
-                id: Date.now()
+                });
             });
-        });
+            
+            // Event handling
+            document.getElementById('listenEvents').addEventListener('click', async () => {
+                const eventsLog = document.getElementById('eventsLog');
+                
+                // Listen for custom event
+                await listen('custom-event', (event) => {
+                    eventsLog.textContent += `\nReceived custom-event: ${JSON.stringify(event.payload)}`;
+                });
+                
+                // Listen for progress events
+                await listen('progress', (event) => {
+                    eventsLog.textContent += `\nProgress: ${event.payload}`;
+                });
+                
+                // Listen for task completion
+                await listen('task-complete', (event) => {
+                    eventsLog.textContent += `\nTask completed: ${event.payload}`;
+                });
+                
+                eventsLog.textContent = "Listening for events...";
+            });
+            
+            document.getElementById('emitEvent').addEventListener('click', async () => {
+                await sendTauriCommand('emit_event_example', {});
+            });
+            
+            document.getElementById('runTask').addEventListener('click', async () => {
+                await sendTauriCommand('run_background_task', {});
+                document.getElementById('eventsLog').textContent += "\nStarted background task...";
+            });
+        }
     </script>
 </body>
-</html> 
 </html> 
